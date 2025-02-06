@@ -123,8 +123,8 @@ Remember, the side and main commands are both long-running processes. They are n
 invoked for every line, as `xargs` would do.
 
 ## Using `$[]`
-For cleaner, more-intuitive interpolation, you can use `$[]` to wrap your side
-command:
+For cleaner, more-intuitive interpolation, you can use `$[]` to embed your side
+command in your main one:
 
 ```bash
 sidechain map jq '.host = "$[jq .url | host-from-url]"' < input.json
