@@ -1,12 +1,13 @@
-# side: stream editor controlled by a subprocess
+# side
 
 <img src="./images/sidechain_small.svg" width="25%">
 
 side is text-processing utility similar to sed, awk and grep.
 
 What distinguishes it from other tools is that its behavior is not controlled by a
-dedicated scripting language or CLI flags. Instead, it is controlled by a
-user-defined command or pipeline.
+dedicated scripting language or CLI flags. Instead, it is controlled by one or
+more user-provided commands whose outputs can be either injected into the final output or
+scanned for patterns.
 
 side can also replace xargs for some use cases, and provides a key advantage: it does
 not spawn a separate subprocess for every input line.
