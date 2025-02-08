@@ -2,12 +2,16 @@
 
 <img src="./images/sidechain_small.svg" width="25%">
 
-side is text-processing utility similar to sed, awk and grep.
+side is a new text-processing utility that fills a gap between tools like sed, awk, grep, and xargs.
 
-What distinguishes it from other tools is that its behavior is not controlled by a
-dedicated scripting language or CLI flags. Instead, it is controlled by one or
-more user-provided commands whose outputs can be either injected into the final output or
-scanned for patterns.
+What distinguishes side from other tools is that its behavior is not controlled by
+command-line flags or a bespoke scripting language. Instead, the user provides one or
+more auxiliary line-processing commands whose outputs control the text stream.
+
+side shines in these situations:
+- your lines contain a mixture of encodings, e.g. base64 in TSV
+- your filter mangles lines, but you need to preserve them
+- you need to run a subprocess from an awk script, but can't afford to spawn a new process for every input line
 
 side can also replace xargs for some use cases, and provides a key advantage: it does
 not spawn a separate subprocess for every input line.
