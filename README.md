@@ -7,7 +7,7 @@ sed, awk, grep, and xargs. It enables the use of one or more
 [coprocesses](https://en.wikipedia.org/wiki/Coprocess) to filter or modify a text
 stream.
 
-Coprocesses are under-used in pipelines, probably because there is not an easy way to
+Coprocesses are underused in pipelines, probably because there is not an easy way to
 use them. You can do it with
 [gawk](https://www.gnu.org/software/gawk/manual/html_node/Two_002dway-I_002fO.html),
 or bash's [coproc
@@ -15,10 +15,10 @@ builtin](https://www.gnu.org/software/bash/manual/html_node/Coprocesses.html), b
 these are obscure features and frankly not very easy to use.
 
 copipe shines in these situations:
-- your data uses a mixture of encodings, e.g. base64 in TSV
-- your filter mangles lines, but you need to preserve them
-- you are using xargs or awk to spin up subprocesses, but would prefer not to pay the
-  cost of spawning a new process for every input line
+- your data contains a mixture of encodings, e.g. base64 in TSV
+- you have a filter mangles lines, but you need to preserve them
+- you're using xargs or awk to process lines in subprocesses, but would prefer not to
+  pay the cost of spawning a new process for every line
 
 ### Background
 The idea is borrowed from an audio mixing technique called
