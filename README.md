@@ -1,23 +1,27 @@
-# side
+# copipe
 
 <img src="./images/sidechain_small.svg" width="25%">
 
-side is a new text-processing utility that fills a gap between tools like sed, awk, grep, and xargs.
+copipe is a line-based text-processing utility that fills a gap between tools like
+sed, awk, grep, and xargs. It enables the use of one or more
+[coprocesses](https://en.wikipedia.org/wiki/Coprocess) to filter or modify a text
+stream.
 
-What distinguishes side from other tools is that its behavior is not controlled by
-command-line flags or a bespoke scripting language. Instead, the user provides one or
-more auxiliary line-processing commands whose outputs control the text stream.
+Coprocesses are an under-used in pipelines, probably because there is not an easy way
+to use them. You can do it with
+[gawk](https://www.gnu.org/software/gawk/manual/html_node/Two_002dway-I_002fO.html),
+or bash's [coproc
+builtin](https://www.gnu.org/software/bash/manual/html_node/Coprocesses.html), but
+these are obscure features and frankly not very easy to use.
 
-side shines in these situations:
-- your lines contain a mixture of encodings, e.g. base64 in TSV
+copipe shines in these situations:
+- your data uses a mixture of encodings, e.g. base64 in TSV
 - your filter mangles lines, but you need to preserve them
-- you need to run a subprocess from an awk script, but can't afford to spawn a new process for every input line
+- you are using xargs or awk to spin up subprocesses, but would prefer not to pay the
+  cost of spawning a new process for every input line
 
-side can also replace xargs for some use cases, and provides a key advantage: it does
-not spawn a separate subprocess for every input line.
-
-### "Side?"
-The name and concept are borrowed from an audio mixing technique called
+### Background
+The idea is borrowed from an audio mixing technique called
 [side-chaining](https://en.wikipedia.org/wiki/Dynamic_range_compression#Side-chaining)
 in which an effect applied to one audio signal is controlled by an auxiliary signal.
 
@@ -32,7 +36,7 @@ is to use a compressor triggered by a high-pass-filtered copy of the vocal chann
 
 ### Side-chaining in Unix Pipelines
 In a data pipeline, we can use this technique to control our primary data path using
-an auxiliary command or pipeline.
+a co-process.
 
 <img src="./images/sidechain_filter.svg" width="75%">
 
@@ -40,7 +44,7 @@ an auxiliary command or pipeline.
 Sometimes, you can't build the filter you need without removing critical parts of
 your input.
 
-With `side filter`, you get to keep your original data, even if you use a
+With `copipe filter`, you get to keep your original data, even if you use a
 line-mangling filter.
 
 ### Example
@@ -61,51 +65,51 @@ $ cut -f2 input.tsv | jq -c 'select(.foo != .bar)'
 ...but then we'd lose the usernames. What if we could use this filter _and_ keep our
 original data?
 
-#### Solution with side
+#### Solution with copipe
 ```bash
-$ side filter -x 'cut -f2 | jq ".foo != .bar"' -p true < input.tsv
+$ copipe filter -x 'cut -f2 | jq ".foo != .bar"' -p true < input.tsv
 alice	{"foo":0,"bar":1}
 charlie	{"bar":0,"foo":1}
 ```
 Arguments:
-* `-x 'cut -f2 | jq ".foo != bar"'`: the aux command; this prints `true` when `.foo != .bar`.
-* `-p true`: retain each line only if its aux output matches the pattern `true`.
+* `-x 'cut -f2 | jq ".foo != bar"'`: the coprocess; this prints `true` when `.foo != .bar`.
+* `-p true`: output only those lines that match the pattern `true`.
 
 <img src="./images/sidechain_filter_annotated.svg">
 
-Here, we're telling side to start the aux command, pipe each line to it and look for
+Here, we're telling copipe to start the coprocess, pipe each line to it, and look for
 the pattern `true`. Matching lines are emitted **in their original, unmangled form.**
 
-Note: the aux command is **spawned only once**. It's a long-running subprocess that
+Note: the coprocess is **spawned only once**. It's a long-running program that
 handles all input lines. Contrast this with a solution in `awk` or `bash`, which
 would require invoking `jq` separately for every input line.
 
 ## Map Mode
-In map mode, the aux command generates values which can be merged back into the main
+In map mode, the coprocess generates values which can be injected back into the main
 pipeline.
 
 <img src="./images/sidechain_map.svg" width="75%">
 
 ### Example
-Suppose you have a file containing lines of JSON with a `"url"` field, and you want
-to add a new `"host"` field containing the host component of the URL.
+Suppose you have a file containing lines of JSON with a field called `"url"`, and you
+want to add a new `"host"` field containing the host component of the URL.
 
 ```json
 {"name":"alice","url":"https://foo.com"}
 {"name":"billy","url":"http://1.2.3.4:8000/api"}
 ```
 
-It's not hard to extract the host. But how would you surgically do it for a URL
-embedded in JSON?
+It's not hard to extract the host. But how would you do it reliably for URLs embedded
+in JSON?
 
-#### Solution with side
+#### Solution with copipe
 For readability, let's use an imaginary tool called `host-from-url` to extract the
 hosts. In reality, you could use the Ruby one-liner
 `ruby -r uri -ne 'u = URI($_.chomp); puts(u.host || "")'` (this reads from stdin and
 parses all of the URLs with a single invocation).
 
 ```bash
-<input.json side map -I% -x 'jq .url | host-from-url' jq '.host = "%"'
+< input.json copipe map -I% -x 'jq .url | host-from-url' jq '.host = "%"'
 
 #                           ^----- aux command -----^ ^-- main cmd --^
 ```
@@ -125,7 +129,7 @@ For cleaner, more-intuitive interpolation, you can use `$[]` to embed your aux
 command in your main one:
 
 ```bash
-side map jq '.host = "$[jq .url | host-from-url]"' < input.json
+copipe map jq '.host = "$[jq .url | host-from-url]"' < input.json
 
 #                       ^------ aux cmd ------^
 #        ^------------- main command ------------^
@@ -143,7 +147,7 @@ the URL as well. Again, we'll use a placeholder (`port-from-url`) instead of a r
 command that extracts ports from URLs.
 
 ```bash
-side map jq '
+copipe map jq '
     .host = "$[jq .url | host-from-url]"
   | .port =  $[jq .url | port-from-url]
 ' < input.json
@@ -157,7 +161,7 @@ To prevent this, you can insert a preliminary aux command that feeds into the
 downstream ones:
 
 ```bash
-side map \
+copipe map \
   -x 'jq .url' \
   jq '.host = "$[host-from-url]" | .port = $[port-from-url]' \
   < input.json
