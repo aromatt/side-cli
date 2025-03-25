@@ -22,7 +22,7 @@ xcopr shines in these situations:
 - You're using xargs or awk to run subprocesses, but don’t want to spawn a new
   process per line
 
-## Filter Mode: `xcopr f[ilter]`
+## `xcopr filter`
 When filtering data with a pipeline, you often need to trim lines so that they can be
 parsed. But occasionally, you end up trimming away important information that can't
 be conveniently recovered.
@@ -50,7 +50,7 @@ $ cut -f2 input.tsv | jq -c 'select(.foo != .bar)'
 ...but then we'd lose the usernames. With xcopr, you get to keep your original data,
 even if you use a line-mangling filter.
 
-#### Solution with xcopr
+#### Solution with `xcopr f[ilter]`
 ```bash
 $ xcopr f -x 'cut -f2 | jq ".foo != .bar"' -p true < input.tsv
 alice	{"foo":0,"bar":1}
@@ -71,7 +71,7 @@ Remember: the coprocess is **spawned only once**. It's a long-running program th
 handles all input lines. Contrast this with a traditional shell loop, which would
 invoke `jq` separately for every input line.
 
-## Map Mode: `xcopr m[ap]`
+## `xcopr map`
 In map mode, the coprocess generates values which can be injected back into the main
 process's output.
 
@@ -90,7 +90,7 @@ called `"host"`.
 It's not hard to extract the host from a URL. But how would you do it reliably for
 URLs embedded in JSON?
 
-#### Solution with xcopr
+#### Solution with `xcopr m[ap]`
 For readability, let's use an imaginary tool called `host-from-url` to extract the
 hosts. In reality, you could use the Ruby one-liner
 `ruby -r uri -ne 'u = URI($_.chomp); puts(u.host || "")'` (this reads from stdin and
