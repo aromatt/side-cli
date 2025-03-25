@@ -3,12 +3,11 @@
 <img src="./images/copipe_small.svg" width="25%">
 
 copipe is a line-based text-processing utility that fills a gap between tools like
-sed, awk, grep, and xargs. It enables the use of one or more
-[coprocesses](https://en.wikipedia.org/wiki/Coprocess) to filter or modify a text
-stream.
+sed, awk, grep, and xargs. It enables the use of one or more to filter or modify a
+text stream.
 
-Coprocesses are underused in pipelines, probably because there is not an easy way to
-use them. You can do it with
+[Coprocesses](https://en.wikipedia.org/wiki/Coprocess) are underused in pipelines,
+probably because there is not an easy way to use them. You can do it with
 [gawk](https://www.gnu.org/software/gawk/manual/html_node/Two_002dway-I_002fO.html)
 or bash's [coproc
 builtin](https://www.gnu.org/software/bash/manual/html_node/Coprocesses.html), but
@@ -16,34 +15,15 @@ these are obscure features and frankly not very easy to use.
 
 copipe shines in these situations:
 - your data contains a mixture of encodings, e.g. base64 in TSV
-- you have a filter mangles lines, but you need to preserve them
-- you're using xargs or awk to process lines in subprocesses, but would prefer not to
-  pay the cost of spawning a new process for every line
-
-### Background: Side-Chaining
-The idea is borrowed from an audio mixing technique called
-[side-chaining](https://en.wikipedia.org/wiki/Dynamic_range_compression#Side-chaining)
-in which an effect applied to one audio signal is controlled by an auxiliary signal.
-
-For example, you might run a bass guitar channel through a compressor controlled by a
-kick drum channel. In this setup, the bass ducks out of the way on every kick drum
-hit, making for a cleaner, punchier mix.
-
-The auxiliary signal doesn't need to be from a different instrument. It could be a
-filtered copy of the main signal. For example, a simple technique for [de-essing
-vocals](https://en.wikipedia.org/wiki/De-essing#Side-chain_compression_or_broadband_de-essing)
-is to use a compressor triggered by a high-pass-filtered copy of the vocal channel.
-
-#### Side-Chaining in Unix Pipelines
-In a data pipeline, we can use this technique to control our primary data path using
-a co-process.
-
-<img src="./images/copipe_filter.svg" width="75%">
+- you have a filter that mangles lines, but you need to preserve them
+- you're spawning subprocesses from xargs or awk, but would rather not pay the cost
+  of spawning a new process for each line of data
 
 ## Filter Mode
+<img src="./images/copipe_filter.svg" width="75%">
 When filtering data with a pipeline, you often need to trim lines so that they can be
-parsed by a program. But occasionally, you end up trimming away important information
-that can't be conveniently recovered.
+parsed. But occasionally, you end up trimming away important information that can't
+be conveniently recovered.
 
 ### Example
 Imagine we have lines of JSON-in-TSV:
@@ -72,8 +52,8 @@ alice	{"foo":0,"bar":1}
 charlie	{"bar":0,"foo":1}
 ```
 Arguments:
-* `-x 'cut -f2 | jq ".foo != bar"'`: the coprocess; this happens to print `true` when `.foo != .bar`.
-* `-p true`: output only those lines that match the pattern `true`.
+* `-x 'cut -f2 | jq ".foo != .bar"'`: the coprocess; this happens to print `true` when `.foo != .bar`. The coprocess receives one line at a time on stdin, and its output is used to determine whether the original line should be passed through.
+* `-p true`: output original lines whose coprocess output matches the pattern `true`.
 
 <img src="./images/copipe_filter_annotated.svg">
 
@@ -82,8 +62,8 @@ the pattern `true` in its output. Matching lines are emitted **in their original
 unmangled form.**
 
 Note: the coprocess is **spawned only once**. It's a long-running program that
-handles all input lines. Contrast this with a solution in `awk` or `bash`, which
-would require invoking `jq` separately for every input line.
+handles all input lines. Contrast this with a traditional shell loop, which would
+require invoking `jq` separately for every input line.
 
 ## Map Mode
 In map mode, the coprocess generates values which can be injected back into the main
