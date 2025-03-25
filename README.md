@@ -117,7 +117,7 @@ For cleaner, more-intuitive interpolation, you can use `$[]` to embed your copro
 command in your main one:
 
 ```bash
-xcopr map jq '.host = "$[jq .url | host-from-url]"' < input.json
+xcopr m jq '.host = "$[jq .url | host-from-url]"' < input.json
 
 #                        ^----- coprocess -----^
 ```
