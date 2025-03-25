@@ -1,29 +1,36 @@
-# copipe
+# xcopr
 
-<img src="./images/copipe_small.svg" width="25%">
+<img src="./images/xcopr_small.svg" width="25%">
 
-copipe is a line-based text-processing utility that fills a gap between tools like
-sed, awk, grep, and xargs. It enables the use of one or more to filter or modify a
-text stream.
+xcopr is a line-based text-processing utility that fills a gap between tools like
+sed, awk, grep, and xargs. It allows you to split and rejoin pipelines using
+**coprocesses** (long-running subprocesses that persist across multiple lines of
+input).
 
-[Coprocesses](https://en.wikipedia.org/wiki/Coprocess) are underused in pipelines,
-probably because there is not an easy way to use them. You can do it with
-[gawk](https://www.gnu.org/software/gawk/manual/html_node/Two_002dway-I_002fO.html)
-or bash's [coproc
-builtin](https://www.gnu.org/software/bash/manual/html_node/Coprocesses.html), but
-these are obscure features and frankly not very easy to use.
+While coprocesses have existed for decades, they are rarely used from the command
+line, likely because there’s no simple way to use them. Bash’s
+[coproc](https://www.gnu.org/software/bash/manual/html_node/Coprocesses.html) builtin
+and gawk’s [|&
+operator](https://www.gnu.org/software/gawk/manual/html_node/Two_002dway-I_002fO.html)
+technically support coprocesses, but both are obscure, verbose, and awkward by modern
+standards.
 
-copipe shines in these situations:
-- your data contains a mixture of encodings, e.g. base64 in TSV
-- you have a filter that mangles lines, but you need to preserve them
-- you're spawning subprocesses from xargs or awk, but would rather not pay the cost
-  of spawning a new process for each line of data
+xcopr shines in these situations:
+- Your data contains a mixture of encodings, e.g. base64 in TSV
+- You want to use a filter that mangles the line (like jq or cut) but still need to
+  preserve the original line
+- You're using xargs or awk to run subprocesses, but don’t want to spawn a new
+  process per line
 
-## Filter Mode
-<img src="./images/copipe_filter.svg" width="75%">
+## Filter Mode: `xcopr f[ilter]`
 When filtering data with a pipeline, you often need to trim lines so that they can be
 parsed. But occasionally, you end up trimming away important information that can't
 be conveniently recovered.
+
+In filter mode, the coprocess receives one line at a time on stdin, and its output is
+used to determine whether the original line should be passed through.
+
+<img src="./images/xcopr_filter.svg" width="75%">
 
 ### Example
 Imagine we have lines of JSON-in-TSV:
@@ -40,36 +47,35 @@ $ cut -f2 input.tsv | jq -c 'select(.foo != .bar)'
 {"foo":0,"bar":1}
 {"bar":0,"foo":1}
 ```
-...but then we'd lose the usernames.
+...but then we'd lose the usernames. With xcopr, you get to keep your original data,
+even if you use a line-mangling filter.
 
-With `copipe filter`, you get to keep your original data, even if you use a
-line-mangling filter.
-
-#### Solution with copipe
+#### Solution with xcopr
 ```bash
-$ copipe filter -x 'cut -f2 | jq ".foo != .bar"' -p true < input.tsv
+$ xcopr f -x 'cut -f2 | jq ".foo != .bar"' -p true < input.tsv
 alice	{"foo":0,"bar":1}
 charlie	{"bar":0,"foo":1}
 ```
 Arguments:
-* `-x 'cut -f2 | jq ".foo != .bar"'`: the coprocess; this happens to print `true` when `.foo != .bar`. The coprocess receives one line at a time on stdin, and its output is used to determine whether the original line should be passed through.
+* `-x 'cut -f2 | jq ".foo != .bar"'`: the coprocess; this happens to print `true`
+  when `.foo != .bar`.
 * `-p true`: output original lines whose coprocess output matches the pattern `true`.
 
-<img src="./images/copipe_filter_annotated.svg">
+<img src="./images/xcopr_filter_annotated.svg">
 
-Here, we're telling copipe to start the coprocess, pipe each line to it, and look for
+Here, we're telling xcopr to start the coprocess, pipe each line to it, and look for
 the pattern `true` in its output. Matching lines are emitted **in their original,
 unmangled form.**
 
-Note: the coprocess is **spawned only once**. It's a long-running program that
+Remember: the coprocess is **spawned only once**. It's a long-running program that
 handles all input lines. Contrast this with a traditional shell loop, which would
-require invoking `jq` separately for every input line.
+invoke `jq` separately for every input line.
 
-## Map Mode
+## Map Mode: `xcopr m[ap]`
 In map mode, the coprocess generates values which can be injected back into the main
-pipeline.
+process's output.
 
-<img src="./images/copipe_map.svg" width="75%">
+<img src="./images/xcopr_map.svg" width="75%">
 
 ### Example
 Suppose you have a file containing lines of JSON with a field called `"url"`. You
@@ -84,69 +90,68 @@ called `"host"`.
 It's not hard to extract the host from a URL. But how would you do it reliably for
 URLs embedded in JSON?
 
-#### Solution with copipe
+#### Solution with xcopr
 For readability, let's use an imaginary tool called `host-from-url` to extract the
 hosts. In reality, you could use the Ruby one-liner
 `ruby -r uri -ne 'u = URI($_.chomp); puts(u.host || "")'` (this reads from stdin and
 processes all lines with a single invocation).
 
 ```bash
-< input.json copipe map -I% -x 'jq .url | host-from-url' jq '.host = "%"'
+xcopr m -I% -x 'jq .url | host-from-url' jq '.host = "%"' < input.json
 
-#                           ^-------- coprocess -------^ ^-- main cmd --^
+#               ^----- coprocess -----^
 ```
-Like with xargs, we can use `-I <replstr>` to define a placeholder for the values
-generated by the coprocess.
+Arguments:
+* `-I%`: like with xargs, this defines a placeholder string (`%` in this example) for
+  the values generated by the coprocess.
+* `-x 'jq .url | host-from-url'`: the coprocess; this outputs the host component
+  extracted from each JSON record's `"url"` field.
 
-<img src="./images/copipe_map_example.svg" width="75%">
+<img src="./images/xcopr_map_example.svg" width="75%">
 
-Here, the coprocess `jq .url | host-from-url` extracts the hosts, which are then
-inserted into the output of the main command, `jq '.host = "%"'`.
-
-Remember, the coprocess and main commands are both long-running processes. They are
-not invoked for every line, as xargs would do.
+The coprocess `jq .url | host-from-url` extracts the hosts, which are then inserted
+into the output of the main command, `jq '.host = "%"'`.
 
 ## Using `$[]`
 For cleaner, more-intuitive interpolation, you can use `$[]` to embed your coprocess
 command in your main one:
 
 ```bash
-copipe map jq '.host = "$[jq .url | host-from-url]"' < input.json
+xcopr map jq '.host = "$[jq .url | host-from-url]"' < input.json
 
-#                       ^------- coprocess ------^
-#        ^------------- main command ------------^
+#                        ^----- coprocess -----^
 ```
 
-<img src="./images/copipe_map_example_interp.svg" width="75%">
+<img src="./images/xcopr_map_example_interp.svg" width="75%">
 
-This has the same behavior as the `-I%` version; it's just another way to spell it.
+This has the same behavior as the `-I%` version; it's just another way to write it.
 
 ## Multiple Coprocesses
-Map mode supports the use of _multiple coprocesses_.
+Map mode supports **multiple coprocesses**.
 
 Continuing with the URL-parsing example, imagine you want to extract the port from
-the URL as well. Again, we'll use a placeholder (`port-from-url`) instead of a real
-command that extracts ports from URLs.
+the URL as well. Again, we'll use an imaginary tool, `port-from-url`, instead of a
+real command.
 
 ```bash
-copipe map jq '
+xcopr m jq '
     .host = "$[jq .url | host-from-url]"
   | .port =  $[jq .url | port-from-url]
 ' < input.json
 ```
 
-<img src="./images/copipe_map_multiple.svg">
+<img src="./images/xcopr_map_multiple.svg">
 
 This is great, but it duplicates some work: we're running two copies of `jq .url`.
 
-To prevent this, you can insert a preliminary coprocess that feeds into the
+If you want to avoid this, you can insert a preliminary coprocess that feeds into the
 downstream ones:
 
 ```bash
-copipe map \
+xcopr m \
   -x 'jq .url' \
   jq '.host = "$[host-from-url]" | .port = $[port-from-url]' \
   < input.json
 ```
 
-<img src="./images/copipe_map_multiple_prelim.svg">
+<img src="./images/xcopr_map_multiple_prelim.svg">
