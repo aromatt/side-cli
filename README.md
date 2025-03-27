@@ -57,7 +57,7 @@ charlie	{"bar":0,"foo":1}
 Arguments:
 * `-x 'cut -f2 | jq ".foo != .bar"'`: the coprocess; this happens to print `true`
   when `.foo != .bar`.
-* `-p true`: output original lines whose coprocess output matches the pattern `true`.
+* `-p true`: output lines whose coprocess output matches the pattern `true`.
 
 <img src="./images/xcopr_filter_annotated.svg">
 
@@ -67,7 +67,7 @@ unmangled form.**
 
 Remember: the coprocess is **spawned only once**. It's a long-running program that
 handles all input lines. Contrast this with a traditional shell loop, which would
-invoke `jq` separately for every input line.
+invoke `jq` separately for every line.
 
 ## `xcopr map`
 In map mode, the coprocess generates values which can be injected back into the main
