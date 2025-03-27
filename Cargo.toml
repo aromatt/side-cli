@@ -9,4 +9,6 @@ edition = "2021"
 
 
 [dependencies]
+clap = { version = "4", features = ["derive"] }
+shell-escape = "0.1"
 tempfile = "3"

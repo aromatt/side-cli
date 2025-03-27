@@ -1,38 +1,74 @@
+use clap::Parser;
+use shell_escape::escape;
 use std::io::{self, BufRead, Write, Seek, SeekFrom};
 use std::process::Command;
 use tempfile::NamedTempFile;
-use std::path::PathBuf;
 
-fn write_to_tempfile(content: &str) -> std::io::Result<(PathBuf, NamedTempFile)> {
-    let mut tmp = NamedTempFile::new()?;
-    tmp.write_all(content.as_bytes())?;
-    tmp.seek(SeekFrom::Start(0))?;
-    Ok((tmp.path().to_path_buf(), tmp))
+/// xcopr: batch stream lines into temp files and run a shell command
+#[derive(Parser, Debug)]
+#[command(author, version, about)]
+struct Args {
+    /// Shell command to run with all temp files substituted in place of replstr
+    #[arg(short)]
+    cmd: String,
+
+    /// Number of lines to batch together per command invocation
+    #[arg(short = 'n', default_value_t = 1)]
+    batch_size: usize,
+
+    /// Replacement string for batch mode
+    #[arg(short = 'J')]
+    batch_replstr: String,
 }
 
 fn main() -> std::io::Result<()> {
+    let args = Args::parse();
+
     let stdin = io::stdin();
     let lines: Vec<String> = stdin.lock().lines().collect::<Result<_, _>>()?;
 
-    let mut file_paths = Vec::new();
-    let mut handles = Vec::new();
+    // Create a reusable pool of temp files
+    let mut temp_pool: Vec<NamedTempFile> = (0..args.batch_size)
+        .map(|_| NamedTempFile::new().expect("failed to create temp file"))
+        .collect();
 
-    for line in &lines {
-        let line_with_newline = format!("{line}\n");
-        let (path, tmpfile) = write_to_tempfile(&line_with_newline)?;
-        file_paths.push(path);
-        handles.push(tmpfile); // keep alive
-    }
+    for chunk in lines.chunks(args.batch_size) {
+        let mut file_paths = Vec::new();
 
-    let output = Command::new("md5sum")
-        .args(&file_paths)
-        .output()
-        .expect("failed to run md5sum");
+        // Reuse temp files from the pool
+        for (i, line) in chunk.iter().enumerate() {
+            let tmpfile = &mut temp_pool[i];
+            let file = tmpfile.as_file_mut();
+            file.set_len(0)?;
+            file.seek(SeekFrom::Start(0))?;
+            writeln!(file, "{}", line)?;
+            file.flush()?;
+            file_paths.push(tmpfile.path().to_path_buf());
+        }
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    for (input, line) in lines.iter().zip(stdout.lines()) {
-        let hash = line.split_whitespace().next().unwrap_or("<missing>");
-        println!("{:<20} => {}", input.trim_end(), hash);
+        // Build command: replace replstr with all paths (escaped)
+        let files_str = file_paths
+            .iter()
+            .map(|p| escape(p.to_string_lossy()))
+            .collect::<Vec<_>>()
+            .join(" ");
+
+        let shell_cmd = args.cmd.replace(&args.batch_replstr, &files_str);
+
+        let output = Command::new("sh")
+            .arg("-c")
+            .arg(&shell_cmd)
+            .output()
+            .expect("failed to run shell command");
+
+        if !output.status.success() {
+            eprintln!("Command failed:\n{}", String::from_utf8_lossy(&output.stderr));
+        }
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        for line in stdout.lines() {
+            println!("{}", line);
+        }
     }
 
     Ok(())
