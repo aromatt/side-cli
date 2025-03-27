@@ -96,9 +96,7 @@ hosts. In reality, you could use the Ruby one-liner
 processes all lines with a single invocation).
 
 ```bash
-xcopr m -I% -x 'jq .url | host-from-url' jq '.host = "%"' < input.json
-
-#               ^----- coprocess -----^
+xcopr m -I% -x 'jq .url | host-from-url' -- jq '.host = "%"' < input.json
 ```
 Arguments:
 * `-I%`: like with xargs, this defines a placeholder string (`%` in this example) for
@@ -117,8 +115,6 @@ command in your main one:
 
 ```bash
 xcopr m jq '.host = "$[jq .url | host-from-url]"' < input.json
-
-#                        ^----- coprocess -----^
 ```
 
 <img src="./images/xcopr_map_example_interp.svg" width="75%">
