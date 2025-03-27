@@ -12,3 +12,8 @@ edition = "2021"
 clap = { version = "4", features = ["derive"] }
 shell-escape = "0.1"
 tempfile = "3"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
