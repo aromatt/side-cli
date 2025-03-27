@@ -1,26 +1,23 @@
 # xcopr
-
 <img src="./images/xcopr_small.svg" width="25%">
 
-xcopr is a line-based text-processing utility that fills a gap between tools like
-sed, awk, grep, and xargs. It allows you to split and rejoin pipelines using
-**coprocesses** (long-running subprocesses that persist across multiple lines of
-input).
+xcopr is a text-processing utility that fills a gap in the standard command-line
+toolset: it can split and rejoin pipelines by utilizing **coprocesses**.
 
-While coprocesses have existed for decades, they are rarely used from the command
-line, likely because there’s no simple way to use them. Bash’s
-[coproc](https://www.gnu.org/software/bash/manual/html_node/Coprocesses.html) builtin
-and gawk’s [|&
-operator](https://www.gnu.org/software/gawk/manual/html_node/Two_002dway-I_002fO.html)
-technically support coprocesses, but both are obscure, verbose, and awkward by modern
-standards.
+A coprocess runs in parallel with a main process and communicates bidirectionally
+with it. Coprocesses are often overlooked when composing stream-processing pipelines
+in the shell, understandably so: there's no easy way to use them that way.
+[Bash](https://www.gnu.org/software/bash/manual/html_node/Coprocesses.html) and
+[gawk](https://www.gnu.org/software/gawk/manual/html_node/Two_002dway-I_002fO.html)
+have coprocessing features, but both are too verbose and awkward to be used as
+pipeline building blocks in practice.
 
 xcopr shines in these situations:
 - Your data contains a mixture of encodings, e.g. base64 in TSV
-- You want to use a filter that mangles the line (like jq or cut) but still need to
-  preserve the original line
+- You want to use a filter that mangles lines (e.g. with cut, sed, etc.) but need to
+  preserve the original lines for the output or next stage of processing
 - You're using xargs or awk to run subprocesses, but don’t want to spawn a new
-  process per line
+  process for every line
 
 ## `xcopr filter`
 When filtering data with a pipeline, you often need to trim lines so that they can be
@@ -43,14 +40,15 @@ charlie	{"bar":0,"foo":1}
 We want to filter this data to produce a list of users who have `.foo != .bar`. We
 could use:
 ```bash
-$ cut -f2 input.tsv | jq -c 'select(.foo != .bar)'
+$ cut -f2 | jq -c 'select(.foo != .bar)' < input.tsv
 {"foo":0,"bar":1}
 {"bar":0,"foo":1}
 ```
-...but then we'd lose the usernames. With xcopr, you get to keep your original data,
-even if you use a line-mangling filter.
+...but then we'd lose the usernames. With xcopr, we get to keep the original data by
+delegating the line-mangling to a coprocess.
 
-#### Solution with `xcopr f[ilter]`
+#### Solution with `xcopr filter`
+(`xcopr f`, for short)
 ```bash
 $ xcopr f -x 'cut -f2 | jq ".foo != .bar"' -p true < input.tsv
 alice	{"foo":0,"bar":1}
@@ -90,7 +88,8 @@ called `"host"`.
 It's not hard to extract the host from a URL. But how would you do it reliably for
 URLs embedded in JSON?
 
-#### Solution with `xcopr m[ap]`
+#### Solution with `xcopr map`
+(`xcopr m`, for short)
 For readability, let's use an imaginary tool called `host-from-url` to extract the
 hosts. In reality, you could use the Ruby one-liner
 `ruby -r uri -ne 'u = URI($_.chomp); puts(u.host || "")'` (this reads from stdin and
