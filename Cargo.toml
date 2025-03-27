@@ -1,7 +1,11 @@
 [package]
-name = "copipe"
+name = "xcopr"
+authors = ["Andrew Matteson <andrewkmatteson@gmail.com>"]
 version = "0.1.0"
+description = "A command-line tool for processing line-based data using coprocesses"
+homepage = "https://github.com/aromatt/xcopr"
+repository = "https://github.com/aromatt/xcopr"
 edition = "2021"
-description = ""
+
 
 [dependencies]
