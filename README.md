@@ -127,17 +127,20 @@ Arguments:
 The coprocess `jq .url | host-from-url` extracts the hosts, which are then inserted
 into the output of the main command, `jq '.host = "%"'`.
 
-## Using `$[]`
-For cleaner, more-intuitive interpolation, you can use `$[]` to embed your coprocess
-command in your main one:
+## Using `${}`
+As an alternative to `-I`, you may use `${}` to embed your coprocess command in your
+main one:
 
 ```bash
-xcopr m jq '.host = "$[jq .url | host-from-url]"' < input.json
+xcopr m jq '.host = "${jq .url | host-from-url}"' < input.json
 ```
 
 <img src="./images/xcopr_map_example_interp.svg" width="75%">
 
-This has the same behavior as the `-I%` version; it's just another way to write it.
+This has the same behavior as the `-I` version; it's just another way to write it.
+
+Note: to pass a literal dollar sign (e.g., to let the shell perform variable
+expansion), use `$$`.
 
 ## Multiple Coprocesses
 Map mode supports **multiple coprocesses**.
@@ -148,8 +151,8 @@ real command.
 
 ```bash
 xcopr m jq '
-    .host = "$[jq .url | host-from-url]"
-  | .port =  $[jq .url | port-from-url]
+    .host = "${jq .url | host-from-url}"
+  | .port =  ${jq .url | port-from-url}
 ' < input.json
 ```
 
@@ -157,13 +160,13 @@ xcopr m jq '
 
 This is great, but it duplicates some work: we're running two copies of `jq .url`.
 
-If you want to avoid this, you can insert a preliminary coprocess that feeds into the
-downstream ones:
+If you want to avoid this kind of redundancy, you can insert a preliminary coprocess
+that feeds into the downstream ones:
 
 ```bash
 xcopr m \
   -c 'jq .url' \
-  jq '.host = "$[host-from-url]" | .port = $[port-from-url]' \
+  jq '.host = "${host-from-url}" | .port = ${port-from-url}' \
   < input.json
 ```
 
