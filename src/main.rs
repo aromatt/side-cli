@@ -7,7 +7,6 @@ use std::io::{self, BufRead, BufReader, Write, Seek, SeekFrom};
 use std::process::Command;
 use tempfile::NamedTempFile;
 
-/// xcopr: batch stream lines into temp files and run a shell command
 #[derive(Parser, Debug)]
 #[command(author, version, about)]
 struct Args {
@@ -111,8 +110,7 @@ fn run_batch_mode(batch_size: usize, batch_replstr: &str, cmd: &str) -> Result<(
         let shell_cmd = cmd.replace(&batch_replstr, &files_str);
 
         let mut child = Command::new("sh")
-            .arg("-euo")
-            .arg("pipefail")
+            .arg("-eu")
             .arg("-c")
             .arg(&shell_cmd)
             .stdout(Stdio::piped())
@@ -126,6 +124,7 @@ fn run_batch_mode(batch_size: usize, batch_replstr: &str, cmd: &str) -> Result<(
 
         let reader = BufReader::new(stdout);
 
+        // TODO in map mode, inject coprocess output into main output
         for (_, line) in chunk.iter().zip(reader.lines()) {
             let line = line.map_err(|e| XcoprError::InvalidUtf8(e))?;
             println!("{}", line);
