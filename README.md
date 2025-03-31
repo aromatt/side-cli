@@ -42,12 +42,11 @@ alice	{"foo":0,"bar":1}
 billy	{"foo":1,"bar":1}
 charlie	{"bar":0,"foo":1}
 ```
-We want to filter this data to produce a list of users who have `.foo != .bar`. We
+We want to filter this data to produce a list of users who have `.foo == .bar`. We
 could use:
 ```bash
-$ cut -f2 | jq -c 'select(.foo != .bar)' < input.tsv
-{"foo":0,"bar":1}
-{"bar":0,"foo":1}
+$ cut -f2 | jq -c 'select(.foo == .bar)' < input.tsv
+{"foo":1,"bar":1}
 ```
 ...but then we'd lose the usernames. With xcopr, we get to keep the original data by
 delegating the line-mangling to a coprocess.
@@ -55,13 +54,12 @@ delegating the line-mangling to a coprocess.
 #### Solution with `xcopr filter`
 (`xcopr f`, for short)
 ```bash
-$ xcopr f -c 'cut -f2 | jq ".foo != .bar"' -e true < input.tsv
-alice	{"foo":0,"bar":1}
-charlie	{"bar":0,"foo":1}
+$ xcopr f -c 'cut -f2 | jq ".foo == .bar"' -e true < input.tsv
+billy	{"foo":1,"bar":1}
 ```
 Arguments:
-* `-c 'cut -f2 | jq ".foo != .bar"'`: the coprocess; this happens to print `true`
-  when `.foo != .bar`.
+* `-c 'cut -f2 | jq ".foo == .bar"'`: the coprocess; this happens to print `true`
+  when `.foo == .bar`.
 * `-e true`: output lines whose coprocess output matches the pattern `true`.
 
 <img src="./images/xcopr_filter_annotated.svg">
