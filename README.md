@@ -102,12 +102,12 @@ ruby -r uri -ne 'puts(URI($_.chomp).host || "")'
 This reads from stdin and processes all lines with a single invocation.
 
 ```bash
-xcopr m -c 'jq .url | url-host' -- jq '.host = "\1"' < input.json
+xcopr m -c 'jq .url | url-host' jq '.host = "\1"' < input.json
 ```
 Notes:
 * `-c 'jq .url | url-host'` is the coprocess; this outputs the host component
   extracted from each JSON record's `"url"` field.
-* `\1`: like in sed(1), this is special placeholder for injecting a value into the
+* `\1`: like in sed(1), this is a special placeholder for injecting a value into the
   output. In this case, the value is the output of the coprocess.
 
 <img src="./images/xcopr_map_example.svg" width="75%">
