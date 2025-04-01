@@ -10,20 +10,24 @@ use tempfile::NamedTempFile;
 #[derive(Parser, Debug)]
 #[command(author, version, about)]
 struct Args {
-    /// Shell command to run with all temp files substituted in place of replstr
-    #[arg(short)]
-    cmd: String,
+    /// Coprocess shell command. By default, the coprocess receives a copy of xcopr's stdin, and is expected to generate one line of output for each input line.
+    #[arg(short = 'c')]
+    coproc: String,
 
-    /// Number of lines to batch together per command invocation
+    /// Number of lines per batch. In streaming mode (default), xcopr will send batch_size lines
+    /// to stdin of each coprocess followed by an EOF, and then restart each coprocess. In arg
+    /// mode, xcopr execute each coprocess passing batch_size lines as arguments at a time. In
+    /// file-arg mode, xcopr will write batch_size lines to batch_size tempfiles, and pass those
+    /// tempfiles as arguments to each coprocess.
     #[arg(short = 'n', long)]
     batch_size: Option<usize>,
 
-    /// Replacement string for batch mode
-    #[arg(short = 'J', long)]
+    /// Replacement string for tempfile arguments in file-arg mode.
+    #[arg(short = 'F', long)]
     batch_replstr: Option<String>,
 
-    /// Replacement string for streaming mode
-    #[arg(short = 'I', long)]
+    /// Replacement string for arguments in arg mode.
+    #[arg(short = 'J', long)]
     replstr: Option<String>,
 
 }
@@ -41,11 +45,11 @@ impl fmt::Display for XcoprError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use XcoprError::*;
         match self {
-            InvalidBatchMode => write!(f, "Invalid batch mode: both -n and -J are required"),
-            InvalidUtf8(e) => write!(f, "Input contains invalid UTF-8: {}", e),
-            FailedToWrite(e) => write!(f, "Could not write to output stream: {}", e),
-            SubprocessFailed(msg) => write!(f, "Subprocess failed: {}", msg),
-            MissingArgs(arg) => write!(f, "Missing required argument: {}", arg),
+            InvalidBatchMode => write!(f, "invalid batch mode: both -n and -F are required for batch mode"),
+            InvalidUtf8(e) => write!(f, "input contains invalid UTF-8: {}", e),
+            FailedToWrite(e) => write!(f, "could not write to output stream: {}", e),
+            SubprocessFailed(msg) => write!(f, "subprocess failed: {}", msg),
+            MissingArgs(arg) => write!(f, "missing required argument: {}", arg),
         }
     }
 }
@@ -54,9 +58,9 @@ pub type Result<T> = std::result::Result<T, XcoprError>;
 
 fn run(args: Args) -> Result<()> {
     match (&args.batch_size, &args.batch_replstr) {
-        (Some(n), Some(r)) => run_batch_mode(*n, r, &args.cmd),
+        (Some(n), Some(r)) => run_batch_mode(*n, r, &args.coproc),
         (None, None)       => Ok(()),//run_streaming_mode(args),
-        _ => Err(XcoprError::MissingArgs("both -n and -J")),
+        _ => Err(XcoprError::InvalidBatchMode)
     }
 
 }
@@ -114,7 +118,6 @@ fn run_batch_mode(batch_size: usize, batch_replstr: &str, cmd: &str) -> Result<(
             .arg("-c")
             .arg(&shell_cmd)
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
             .spawn()
             .map_err(|e| XcoprError::SubprocessFailed(e.to_string()))?;
 

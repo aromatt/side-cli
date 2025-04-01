@@ -2,14 +2,14 @@
 name = "xcopr"
 authors = ["Andrew Matteson <andrewkmatteson@gmail.com>"]
 version = "0.1.0"
-description = "A command-line tool for processing line-based data using coprocesses"
+description = "A command-line tool for splitting and merging pipelines using coprocesses"
 homepage = "https://github.com/aromatt/xcopr"
 repository = "https://github.com/aromatt/xcopr"
 edition = "2021"
 
 
 [dependencies]
-clap = { version = "4", features = ["derive"] }
+clap = { version = "4", features = ["derive", "wrap_help"] }
 shell-escape = "0.1"
 tempfile = "3"
 

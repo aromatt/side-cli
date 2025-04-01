@@ -1,28 +1,32 @@
 # xcopr
 <img src="./images/xcopr_small.svg" width="25%">
 
-xcopr is a stream-processing tool that fills a gap in the standard command-line
-toolset: it can split and rejoin pipelines using persistent **coprocesses**.
+xcopr adds ergonomic coprocessing to the command-line stream-processing tool set.
 
+In other words:
+* xargs, but for streams
+* sed, but driven by coprocesses instead of a bespoke command language
+* pipelines with dynamic splitting and rejoining
+
+## What is a coprocess?
 A **coprocess** runs in parallel with a main process and communicates bidirectionally
-with it. Coprocesses are often overlooked in command-line stream-processing,
-understandably so: it's not easy to use them that way.
+with it.
+
+Coprocesses are often overlooked in CLI-based stream processing, understandably so:
+it's not easy to use them that way.
 [Bash](https://www.gnu.org/software/bash/manual/html_node/Coprocesses.html),
 [ksh](https://www.ibm.com/docs/en/aix/7.1?topic=shell-coprocess-facility), and
 [gawk](https://www.gnu.org/software/gawk/manual/html_node/Two_002dway-I_002fO.html)
 have coprocessing features, but they are too verbose to serve as pipeline building
 blocks in practice.
 
-Just as xargs(1) streamlines the task of feeding arguments to subprocesses, xcopr
-enables structured coprocessing within pipelines, allowing side computations to run
-in parallel while preserving the main data stream.
-
 xcopr shines in these situations:
-- Your data contains a mixture of encodings (e.g., base64 in TSV)
-- You want to use a line-mangling filter (like cut or jq) but need to preserve the
+- your data contains a mixture of encodings (e.g., base64 in TSV)
+- you want to use a line-mangling filter (like cut or jq) but need to preserve the
   original lines for later use
-- You're using xargs or awk to run subprocesses, but don’t want to fork a new process
+- you're using xargs or awk to run subprocesses, but don’t want to fork a new process
   per line
+- you want to split a pipeline into parallel parts, then merge the results
 
 ## `xcopr filter`
 When filtering data with a pipeline, you often need to trim lines so that they can be
