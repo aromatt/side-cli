@@ -30,11 +30,11 @@ xcopr shines in these situations:
 
 ## `xcopr filter`
 When filtering data with a pipeline, you often need to trim lines so that they can be
-parsed. But occasionally, you end up trimming away important information that can't
-be conveniently recovered.
+parsed. But sometimes, the filter trims away important information needed for later
+processing.
 
-In filter mode, the coprocess receives one line at a time on stdin, and its output is
-used to determine whether the original line should be passed through.
+In filter mode, xcopr sends each input line to a coprocess whose output is used to
+determine whether the original line passes through.
 
 <img src="./images/xcopr_filter.svg" width="75%">
 
@@ -53,7 +53,7 @@ $ cut -f2 | jq -c 'select(.foo == .bar)' < input.tsv
 {"foo":1,"bar":1}
 ```
 ...but then we'd lose the usernames. With xcopr, we get to keep the original data by
-delegating the line-mangling to a coprocess.
+isolating the line-mangling to a coprocess.
 
 #### Solution with `xcopr filter`
 (`xcopr f`, for short)
@@ -95,22 +95,24 @@ called `"host"`.
 It's not hard to extract the host from a URL. But how would you do it reliably for
 URLs embedded in JSON?
 
-#### Solution with `xcopr map`
-For readability, let's use an imaginary program called `url-host` to extract the
-hosts. You could implement this tool as a Ruby one-liner like:
-```
+Note: for readability, let's assume we have a program called `url-host` to extract
+the hosts. You could implement this as a Ruby one-liner:
+```bash
+# reads from stdin and processes all lines before exiting
 ruby -r uri -ne 'puts(URI($_.chomp).host || "")'
 ```
-This reads from stdin and processes all lines with a single invocation.
 
+#### Solution with `xcopr map`
+The following xcopr command uses a coprocess to generate the stream of hosts, then
+inserts them back into the main stream:
 ```bash
 xcopr m -c 'jq .url | url-host' jq '.host = "\1"' < input.json
 ```
 Notes:
 * `-c 'jq .url | url-host'` is the coprocess; this outputs the host component
   extracted from each JSON record's `"url"` field.
-* `\1`: like in sed(1), this is a special placeholder for injecting a value into the
-  output. In this case, the value is the output of the coprocess.
+* `\1`: like in sed, this is a special placeholder for injecting values into the
+  output stream. In this case, the values are the lines emitted by the coprocess.
 
 <img src="./images/xcopr_map_example.svg" width="75%">
 
@@ -138,7 +140,6 @@ Map mode supports **multiple coprocesses**.
 Continuing with the URL-parsing example, imagine you want to extract the port from
 the URL as well. Again, we'll use an imaginary tool, `url-port`, instead of a
 real command.
-
 ```bash
 xcopr m \
   -c 'jq .url | url-host' \
@@ -146,21 +147,24 @@ xcopr m \
   jq '.host = "\1" | .port = \2' \
   < input.json
 ```
+We use `\1` and `\2` to refer to the 1st and 2nd coprocesses, in the order they were
+specified.
+
 Or, using `${}`:
 
 ```bash
-xcopr m jq '
-    .host = "${jq .url | url-host}"
-  | .port =  ${jq .url | url-port}
-' < input.json
+xcopr m \
+  jq '.host = "${jq .url | url-host}" | .port = ${jq .url | url-port}' \
+  < input.json
 ```
 
 <img src="./images/xcopr_map_multiple.svg">
 
 Notice that this duplicates some work: we're running two copies of `jq .url`.
 
-If your workload has this kind of redundancy, you can eliminate it by feeding one
-coprocess into multiple downstream ones:
+This is totally fine in this case, but if your workload involves expensive redundant
+processing, you can eliminate it by connecting one coprocess to multiple downstream
+ones:
 
 ```bash
 xcopr m \
