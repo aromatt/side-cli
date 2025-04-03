@@ -1,33 +1,41 @@
 # xcopr
 <img src="./images/xcopr_small.svg" width="25%">
 
-xcopr adds ergonomic coprocessing to the command-line stream-processing tool set.
+xcopr adds ergonomic **coprocessing** to the classic Unix toolkit.
 
-In other words:
-* xargs, but for streams
-* sed, but driven by coprocesses instead of a bespoke command language
-* pipelines with dynamic splitting and rejoining
+Like xargs, xcopr plays a supporting role, allowing users to compose familiar tools
+more easily.
+
+Unlike xargs, xcopr is focused primarily on data streams: it empowers users to split
+and rejoin them, increasing the reach of shell-based stream processing.
 
 ## What is a coprocess?
-A **coprocess** runs in parallel with a main process and communicates bidirectionally
+A coprocess runs in parallel with a main process and communicates bidirectionally
 with it.
 
-Coprocesses are often overlooked in CLI-based stream processing, understandably so:
-it's not easy to use them that way.
+Coprocesses are often overlooked in shell pipelines, understandably so: it's not easy
+to use them that way.
 [Bash](https://www.gnu.org/software/bash/manual/html_node/Coprocesses.html),
 [ksh](https://www.ibm.com/docs/en/aix/7.1?topic=shell-coprocess-facility), and
 [gawk](https://www.gnu.org/software/gawk/manual/html_node/Two_002dway-I_002fO.html)
 have coprocessing features, but they are too verbose to serve as pipeline building
 blocks in practice.
 
+Whereas xargs forks a new process for each input line, xcopr spins up a long-lived
+coprocess, pipes data to it, and merges its output into the main data path in a
+user-specified way.
+
+## What is xcopr for?
 xcopr shines in these situations:
 - your data contains a mixture of encodings (e.g., base64 in TSV)
 - you want to use a line-mangling filter (like cut or jq) but need to preserve the
   original lines for later use
 - you're using xargs or awk to run subprocesses, but don’t want to fork a new process
   per line
-- you want to split a pipeline into parallel parts, then merge the results
+- you want compose tools in a seemingly-impossible way (e.g., splitting a pipeline
+  into multiple branches)
 
+# Modes
 ## `xcopr filter`
 When filtering data with a pipeline, you often need to trim lines so that they can be
 parsed. But sometimes, the filter trims away important information needed for later
@@ -103,10 +111,10 @@ ruby -r uri -ne 'puts(URI($_.chomp).host || "")'
 ```
 
 #### Solution with `xcopr map`
-The following xcopr command uses a coprocess to generate the stream of hosts, then
-inserts them back into the main stream:
+The following command uses a coprocess to generate the stream of hosts, then inserts
+them back into the main output stream:
 ```bash
-xcopr m -c 'jq .url | url-host' jq '.host = "\1"' < input.json
+xcopr m -c 'jq .url | url-host' -- jq '.host = "\1"' < input.json
 ```
 Notes:
 * `-c 'jq .url | url-host'` is the coprocess; this outputs the host component
