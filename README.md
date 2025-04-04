@@ -91,19 +91,23 @@ process's output.
 <img src="./images/xcopr_map.svg" width="75%">
 
 ### Example
-Suppose you have a file containing lines of JSON with a field called `"url"`. You
-want to extract the host component of each record's URL and stick it in a new field
-called `"host"`.
-
+Consider the following newline-delimited JSON data:
 ```json
 {"name":"alice","url":"https://foo.com"}
 {"name":"billy","url":"http://1.2.3.4:8000/api"}
+...
 ```
-
+Suppose you want to extract the host component of each record's URL and stick it in a
+new field called `"host"`:
+```json
+{"name":"alice","url":"https://foo.com","host":"foo.com"}
+{"name":"billy","url":"http://1.2.3.4:8000/api","host":"1.2.3.4"}
+...
+```
 It's not hard to extract the host from a URL. But how would you do it reliably for
 URLs embedded in JSON?
 
-Note: for readability, let's assume we have a program called `url-host` to extract
+Note: for readability, let's assume we have a program called `get-host` to extract
 the hosts. You could implement this as a Ruby one-liner:
 ```bash
 # reads from stdin and processes all lines before exiting
@@ -114,17 +118,17 @@ ruby -r uri -ne 'puts(URI($_.chomp).host || "")'
 The following command uses a coprocess to generate the stream of hosts, then inserts
 them back into the main output stream:
 ```bash
-xcopr m -c 'jq .url | url-host' -- jq '.host = "\1"' < input.json
+xcopr m -c 'jq .url | get-host' -- jq '.host = "\1"' < input.json
 ```
 Notes:
-* `-c 'jq .url | url-host'` is the coprocess; this outputs the host component
+* `-c 'jq .url | get-host'` is the coprocess; this outputs the host component
   extracted from each JSON record's `"url"` field.
 * `\1`: like in sed, this is a special placeholder for injecting values into the
   output stream. In this case, the values are the lines emitted by the coprocess.
 
 <img src="./images/xcopr_map_example.svg" width="75%">
 
-The coprocess `jq .url | url-host` extracts the hosts, which are then inserted
+The coprocess `jq .url | get-host` extracts the hosts, which are then inserted
 into the output of the main command, `jq '.host = "\1"'`.
 
 ## Using `${}`
@@ -132,7 +136,7 @@ As an alternative to using `-c`, you may use `${}` to embed your coprocess comma
 your main one:
 
 ```bash
-xcopr m jq '.host = "${jq .url | url-host}"' < input.json
+xcopr m jq '.host = "${jq .url | get-host}"' < input.json
 ```
 
 <img src="./images/xcopr_map_example_interp.svg" width="75%">
@@ -146,12 +150,12 @@ expansion), use `$$`.
 Map mode supports **multiple coprocesses**.
 
 Continuing with the URL-parsing example, imagine you want to extract the port from
-the URL as well. Again, we'll use an imaginary tool, `url-port`, instead of a
+the URL as well. Again, we'll use an imaginary tool, `get-port`, instead of a
 real command.
 ```bash
 xcopr m \
-  -c 'jq .url | url-host' \
-  -c 'jq .url | url-port' \
+  -c 'jq .url | get-host' \
+  -c 'jq .url | get-port' \
   jq '.host = "\1" | .port = \2' \
   < input.json
 ```
@@ -162,7 +166,7 @@ Or, using `${}`:
 
 ```bash
 xcopr m \
-  jq '.host = "${jq .url | url-host}" | .port = ${jq .url | url-port}' \
+  jq '.host = "${jq .url | get-host}" | .port = ${jq .url | get-port}' \
   < input.json
 ```
 
@@ -177,8 +181,8 @@ ones:
 ```bash
 xcopr m \
   -c 'jq .url' \
-  -c '$1{url-host}' \
-  -c '$1{url-host}' \
+  -c '$1{get-host}' \
+  -c '$1{get-host}' \
   jq '.host = "\2" | .port = \3' \
   < input.json
 ```
@@ -189,7 +193,7 @@ Equivalently:
 ```bash
 xcopr m \
   -c 'jq .url' \
-  jq '.host = "$1{url-host}" | .port = $1{url-host}' \
+  jq '.host = "$1{get-host}" | .port = $1{get-host}' \
   < input.json
 ```
 
