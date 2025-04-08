@@ -21,13 +21,13 @@ to use them that way.
 have coprocessing features, but they are too verbose to serve as pipeline building
 blocks in practice.
 
-Whereas `xargs` essentially converts input streams into batches of arguments to be
-passed to a series of subprocesses, `xcopr` spins up one or more long-lived
-coprocesses, pipes data to them, and merges their outputs into the main data path in
-a user-specified way.
+Whereas `xargs` converts input streams into batches of arguments to be passed to a
+series of subprocesses, `xcopr` spins up one or more long-lived coprocesses, pipes
+data to them, and merges their outputs into the main data path in a user-specified
+way.
 
 ## What is `xcopr` good for?
-`xcopr` shines in these situations:
+`xcopr` may help in these situations:
 - Your data contains a mixture of encodings (e.g., base64 in TSV).
 - Your pipeline involves piping queries to a database client like `sqlite3` or
   `redis-cli`.
@@ -40,12 +40,11 @@ a user-specified way.
 
 # Modes
 ## `xcopr filter`
-When filtering data with a pipeline, you often need to trim lines so that they can be
-parsed. But sometimes, the filter trims away important information needed for later
-processing.
+In filter mode, the user specifies a filter to be executed as a coprocess whose
+output will determine whether each line passes through.
 
-In filter mode, `xcopr` sends each input line to a coprocess whose output is used to
-determine whether the original line passes through.
+Lines are passed through in their original form, unaffected by any destructive
+line-mangling performed by the filter.
 
 <img src="./images/xcopr_filter.svg" width="75%">
 
