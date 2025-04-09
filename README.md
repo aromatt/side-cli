@@ -4,11 +4,9 @@
 `xcopr` adds ergonomic **coprocessing** to the classic Unix toolkit.
 
 Like `xargs`, it plays a supporting role, allowing users to compose familiar tools
-more easily. But unlike `xargs`, it is focused primarily on data streams, empowering
-users to split and rejoin them.
-
-`xcopr` increases the reach of shell-based stream processing, raising the threshold
-at which most people would jump from the shell to a full-blown programming language.
+more easily. But unlike `xargs`, `xcopr` is designed for stream processing. It enables
+users to **split and rejoin pipelines**, which increases the reach of pipeline-based
+programming.
 
 ## What is a coprocess?
 A coprocess runs in parallel with a main process and communicates bidirectionally
@@ -22,24 +20,24 @@ to use them that way.
 have coprocessing features, but they are too verbose to serve as pipeline building
 blocks in practice.
 
-## What is it good for?
-It can help in these situations:
+## Use Cases
+`xcopr` can help in these situations:
 - Your data contains a mixture of encodings (e.g., base64 in TSV).
-- Your pipeline involves piping queries to a database client like `sqlite3` or
-  `redis-cli`.
 - You want to use a line-mangling filter (like `cut` or `jq`) but need to preserve
   the original lines for subsequent steps in the pipeline.
-- You're using xargs or awk to run subprocesses, but don’t want to fork a new process
-  per line.
-- You want compose tools in a seemingly-impossible way (e.g., splitting a pipeline
+- You want to use bulk database queries to enrich large, line-based datasets.
+- You're using `xargs` or `awk` to run subprocesses, but don’t want to fork a new
+  process per line.
+- You want to compose tools in a seemingly-impossible way (e.g., splitting a pipeline
   into multiple branches).
 
-## Comparisons with other tools
+## `xcopr` vs. Other Tools
 <details>
 <summary><code>xargs</code></summary>
+<br>
 
-Both `xargs` and `xcopr` help users compose other utilities more easily. They both
-send input from stdin to child processes.
+Both `xargs` and `xcopr` help users compose other utilities more easily by passing
+stdin to child processes.
 
 But the similarities end there:
 * `xargs` groups its stdin into batches of arguments for its child processes;
@@ -52,17 +50,19 @@ But the similarities end there:
 
 <details>
 <summary><code>sed</code></summary>
+<br>
 
 Both `sed` and `xcopr` are used for line-based stream processing, and fit naturally
-pipelines.
+into pipelines.
 
-In `sed`, data is manipulated using a bespoke scripting language; in `xcopr`, data is
-manipulated by coprocesses. `sed` does not preserve stdin for further downstream
-processing; `xcopr` does.
+However, while `sed`'s behavior is controlled by a bespoke scripting language,
+`xcopr` uses coprocesses. Also, `sed` does not preserve original lines or support
+multiple parallel processing streams, while `xcopr` does.
 </details>
 
 <details>
 <summary><code>awk</code></summary>
+<br>
 
 `awk` is a powerful programming language, and its GNU variant [supports
 coprocessing](https://www.gnu.org/software/gawk/manual/html_node/Two_002dway-I_002fO.html)
@@ -70,150 +70,192 @@ just like any general-purpose language (you can achieve what `xcopr` does in a P
 script).
 
 By contrast, `xcopr` is not a programming language at all. It is a small command-line
-utility designed to be used in composition with other tools.
+utility designed for composition with other tools.
 </details>
 
 <details>
 <summary><code>coproc</code> (bash)</summary>
+<br>
 
 Bash supports coprocessing via the `coproc` keyword, which lets you set up a
-long-lived subprocess and communicate with it over file descriptors. This vaguely
-resembles what `xcopr` does, but it is a low-level feature requiring careful,
-explicit management to avoid its
+long-lived subprocess and communicate with it via its standard I/O streams. This
+vaguely resembles what `xcopr` does, but `coproc` is a low-level feature requiring
+careful, explicit management to avoid its
 [pitfalls](https://bash-hackers.gabe565.com/syntax/keywords/coproc).
 
-It also has key limitations:
-* It is not pipeline-friendly
-* It is not portable to other shells
+`coproc` also has key limitations:
+* It's not pipeline-friendly
+* It's not portable to other shells
 * It doesn't support multiple coprocesses
 </details>
 
 <details>
 <summary><code>expect</code></summary>
+<br>
 
-Like `xcopr`, `expect` manages subprocess interaction and allows user-configured
-communication with long-running commands.
+Like `xcopr`, `expect` enables configurable communication with long-running
+subprocesses.
 
-However:
-* `expect` is designed for terminal automation (e.g., telnet, ssh, passwd), while
-  `xcopr` is for line-based stream processing.
+However, they differ greatly in their intended use cases and features:
+* `expect` is designed for terminal automation (e.g., `telnet`, `ssh`, `passwd`),
+  while `xcopr` is designed for stream processing.
 * `expect` scripts manage control flow and simulate user input; `xcopr` focuses on
-  piping input and output through coprocesses in a pipeline.
+  piping data through coprocesses in a pipeline.
 * `expect` runs standalone scripts; `xcopr` is used inline as part of a shell pipeline.
 </details>
 
 
-# Modes
-## `xcopr filter`
-In filter mode, the user specifies a filter to be executed as a coprocess whose
-output will determine whether each line passes through.
-
-Lines are passed through in their original form, unaffected by any destructive
-line-mangling performed by the filter.
+# Usage
+## Filter Mode
+In filter mode, the user specifies a coprocess whose output will determine whether
+each stdin line passes through.
 
 <img src="./images/xcopr_filter.svg" width="75%">
 
-### Example
-Imagine we have lines of JSON-in-TSV:
+### Basic Usage
+```bash
+xcopr filter -c COPROC -e PATTERN
+```
+Arguments:
+* `-c COPROC`: the coprocess, stated as a shell command.
+* `-e PATTERN`: the pattern to search for in the coprocess's output.
+
+Lines are emitted in their original form, unaffected by any destructive changes
+performed by `COPROC`.
+
+### Example: JSON-in-TSV
 ```txt
 # input.tsv
 alice	{"foo":0,"bar":1}
 billy	{"foo":1,"bar":1}
-charlie	{"bar":0,"foo":1}
+chuck	{"bar":0,"foo":1}
 ```
-We want to filter this data to produce a list of users who have `.foo == .bar`. We
-could use:
+Print a list of users for whom `.foo == .bar`:
 ```bash
-$ cut -f2 input.tsv | jq -c 'select(.foo == .bar)'
-{"foo":1,"bar":1}
-```
-...but then we'd lose the usernames. With `xcopr`, we get to keep the original data
-by isolating the line-mangling to a coprocess.
+$ xcopr filter -c 'cut -f2 | jq ".foo == .bar"' -e true < input.tsv
 
-#### Solution with `xcopr filter`
-(`xcopr f`, for short)
-```bash
-$ xcopr f -c 'cut -f2 | jq ".foo == .bar"' -e true < input.tsv
+# output
 billy	{"foo":1,"bar":1}
 ```
-Arguments:
-* `-c COMMAND`: a coprocess; this one happens to print `true` when `.foo == .bar`.
-* `-e PATTERN`: output lines whose coprocess output matches the pattern `true`.
-
-<img src="./images/xcopr_filter_annotated.svg">
 
 Here, we're telling `xcopr` to start the coprocess, pipe each line to it, and look
 for the pattern `true` in its output. Matching lines are emitted **in their original,
 unmangled form.**
 
-Remember: the coprocess is **spawned only once**. It's a long-running program that
-handles all input lines. Contrast this with a traditional shell loop, which would
-invoke `jq` separately for every line.
+<img src="./images/xcopr_filter_annotated.svg">
 
-## `xcopr map`
-In map mode, the coprocess generates values which can be injected back into the main
+Remember: the `cut | jq` coprocess is **spawned only once**. It's a long-running
+program that handles all input lines. Contrast this with a traditional shell loop,
+which would invoke `cut | jq` separately for every line.
+
+## Map Mode
+In map mode, coprocesses **generate values** which can be injected back into the main
 process's output.
 
 <img src="./images/xcopr_map.svg" width="75%">
 
-### Example
-Suppose you have a SQL database containing DNS-like data:
+### Basic Usage
+```
+xcopr map [-c COPROC | -p STRING ...] [COMMAND]
+```
+Arguments:
+* `-c COPROC`: a coprocess, stated as a shell command, which generates a stream of
+  lines. By default, each coprocess created this way receives a copy of `xcopr`'s
+  stdin.
+* `-p STRING`: a print-string which generates a stream of lines, potentially
+  referencing other coprocesses or print-strings. This is a convenient shorthand for
+  a coprocess like `awk {print ...}`.
+* `COMMAND`: the command which generates the final output of `xcopr`. If omitted, the
+  final output is that of the last-specified coprocess or print-string.
+
+Each coprocess (`-c`) and print-string (`-p`) generates a stream (a sequence of
+lines). These streams may be referenced by the main command (or by other coprocesses
+and print-strings) using a simple substitution mechanism, described in greater detail below.
+
+### Referencing Streams
+Each stream may be referenced by its position in the `xcopr` command using `%1`,
+`%2`, and so on. `%0` is the original stdin of `xcopr` itself.
+
+These references are called "stream variables," and they are conceptual similar to
+`\1` in `sed` or `$1` in `awk`: in the output of `xcopr`, a stream variable takes on
+a different value for each line processed.
+
+#### Example: Dynamic Word Reversal in JSON
+```txt
+# input.jsonl
+{"word":"hello","msg":"hello world"}
+```
+Reverse instances of `.word` found in `.msg`:
+```bash
+$ xcopr map \
+    -c 'jq -r .word | rev' \
+    jq -c '.msg |= gsub(.word, "%1")' \
+    < input.jsonl
+
+# output
+{"word":"hello","msg":"olleh world"}
+```
+Note: both `jq` commands, and `rev`, are long-lived, parallel processes that handle
+all lines before exiting.
+
+### In-Place Coprocesses
+A `%{cmd}` appearing anywhere in a coprocess command or print-string creates a new
+coprocess and refers to it in-place. This coprocess receives a copy of `xcopr`'s
+stdin. This is equivalent to creating a stream using `-c` or `-p` and referring to it
+with `%N`.
+
+Similarly, `%N{cmd}` creates an in-place coprocess that receives stream `N` as its
+stdin (so, `%0{cmd}` behaves exactly the same as `%{cmd}`).
+
+#### Example: Bulk Redis Queries
+Imagine we store birthdays by user ID in Redis.
+
+We want to enrich the following data by adding each user's birthday:
+```txt
+# input.jsonl
+{"name":"alice","id":1}
+{"name":"billy","id":2}
+
+# output
+{"name":"alice","id":1,"birthday":"1975-05-10"}
+{"name":"billy","id":2,"birthday":"2010-06-20"}
+```
+We can perform the Redis lookups in bulk using a coprocess:
+```bash
+$ xcopr map \
+    -p 'GET id:%{jq .id}' \
+    jq -c '.birthday = "%1{redis-cli --raw}"' \
+    < input.jsonl
+```
+As usual, all subprocesses (`redis-cli` and `jq`) are long-lived, parallel processes
+that handle all lines before exiting.
+
+#### Example: Bulk SQLite Queries
+Imagine we have a SQL database containing DNS-like data:
 ```
 sqlite> select * from dns;
 id  domain   ip
 --  -------  -------
 1   foo.com  1.1.1.1
 2   bar.com  2.2.2.2
-3   baz.com  3.3.3.3
 ```
-Suppose you need to use this database to enrich a large set of domains, annotating
-each with its associated IP:
-```
-# input
+We want to use this database to enrich a large dataset, annotating each domain with
+its associated IP:
+```txt
+# input.jsonl
 {"domain":"foo.com"}
 {"domain":"bar.com"}
-...
 
 # output
 {"domain":"foo.com","ip":"1.1.1.1"}
 {"domain":"bar.com","ip":"2.2.2.2"}
-...
 ```
-A quick solution in bash might look like this:
+We can perform the SQL queries in bulk using a coprocess:
 ```bash
-while read -r line; do
-  dom=$(echo $line | jq -r .domain)
-  ip=$(sqlite3 -list test.db "SELECT ip FROM dns WHERE domain = '$dom'")
-  echo $line | jq -c ".ip = \"$ip\""
-done < domains.jsonl
+$ xcopr map \
+    -p "SELECT ip FROM dns WHERE domain = '%{jq -r .domain}'" \
+    jq -c '.ip = "%1{sqlite3 -list dns.db}"' \
+    < input.jsonl
 ```
-However, this forks a new `sqlite3` process for every input line, even though
-`sqlite3` is capable of bulk queries via stdin.
-
-You could ditch `jq` and do all the formatting using SQLite's built-in JSON support,
-but this gets hairy quickly.
-
-This type of problem follows a pattern:
-- The original solution uses multiple tools composed with a shell loop or `xargs`.
-- You could improve performance, but it would require consolidating all of the logic
-  into one tool.
-- The result is brittle and verbose. The solution is more complex than the problem
-  because the most natural tools cannot be composed in the required way.
-
-#### Solution with `xcopr map`
-With `xcopr map`, you get the performance of bulk queries and keep the elegance
-afforded by composing small tools.
-
-```bash
-xcopr map \
-  -c "jq -r .domain" \
-  -p "SELECT ip FROM dns WHERE domain = '%1'" \
-  -c "%2{sqlite3 -list test.db}" \
-  jq -c '.ip = "%3"'
-```
-|Argument|Explanation|Stream|
-|--------|-----------|------|
-|`-c "jq -r .domain"`|A coprocess that produces a stream of domains|1|
-|`-p "SELECT ip FROM dns WHERE domain = '%1'"`|Creates a stream of strings (`-p` is for `--print`). This is a quick, native substitute for a coprocess like `awk {print ...}`. The `%1` is a placeholder similar to `\1` in `sed` or `$1` in `awk`: it takes on a different value for each input line. In `%N`, the `N` refers to the Nth stream specified.|2|
-|`-c "%2{sqlite3 -list test.db}"`|A coprocess that produces a stream of IPs returned by the SQLite database. The `%N{}` syntax means: "send stream `N` to the `{}`-enclosed coprocess.|3|
-|`jq -c '.ip = "%3"'`|The main process. This receives the original stdin and injects the IPs from stream 3|-|
+Again, all subprocesses (`sqlite3` and `jq`) are long-lived, parallel processes that
+handle all lines before exiting.
