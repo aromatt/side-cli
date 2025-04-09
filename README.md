@@ -3,11 +3,12 @@
 
 `xcopr` adds ergonomic **coprocessing** to the classic Unix toolkit.
 
-Like `xargs`, `xcopr` plays a supporting role, allowing users to compose familiar
-tools more easily.
+Like `xargs`, it plays a supporting role, allowing users to compose familiar tools
+more easily. But unlike `xargs`, it is focused primarily on data streams, empowering
+users to split and rejoin them.
 
-Unlike `xargs`, `xcopr` is focused primarily on data streams: it empowers users to
-split and rejoin them, increasing the reach of shell-based stream processing.
+`xcopr` increases the reach of shell-based stream processing, raising the threshold
+at which most people would jump from the shell to a full-blown programming language.
 
 ## What is a coprocess?
 A coprocess runs in parallel with a main process and communicates bidirectionally
@@ -21,13 +22,8 @@ to use them that way.
 have coprocessing features, but they are too verbose to serve as pipeline building
 blocks in practice.
 
-Whereas `xargs` converts input streams into batches of arguments to be passed to a
-series of subprocesses, `xcopr` spins up one or more long-lived coprocesses, pipes
-data to them, and merges their outputs into the main data path in a user-specified
-way.
-
-## What is `xcopr` good for?
-`xcopr` may help in these situations:
+## What is it good for?
+It can help in these situations:
 - Your data contains a mixture of encodings (e.g., base64 in TSV).
 - Your pipeline involves piping queries to a database client like `sqlite3` or
   `redis-cli`.
@@ -37,6 +33,75 @@ way.
   per line.
 - You want compose tools in a seemingly-impossible way (e.g., splitting a pipeline
   into multiple branches).
+
+## Comparisons with other tools
+<details>
+<summary><code>xargs</code></summary>
+
+Both `xargs` and `xcopr` help users compose other utilities more easily. They both
+send input from stdin to child processes.
+
+But the similarities end there:
+* `xargs` groups its stdin into batches of arguments for its child processes;
+  `xcopr` pipes its stdin to its coprocesses.
+* `xargs` invokes the specified utility several times (one for each batch of
+  arguments); `xcopr`'s coprocesses are long-lived.
+* `xargs` does not preserve stdin for further downstream processing; `xcopr` does.
+* `xargs` does not support multiple coordinated subprocesses; `xcopr` does.
+</details>
+
+<details>
+<summary><code>sed</code></summary>
+
+Both `sed` and `xcopr` are used for line-based stream processing, and fit naturally
+pipelines.
+
+In `sed`, data is manipulated using a bespoke scripting language; in `xcopr`, data is
+manipulated by coprocesses. `sed` does not preserve stdin for further downstream
+processing; `xcopr` does.
+</details>
+
+<details>
+<summary><code>awk</code></summary>
+
+`awk` is a powerful programming language, and its GNU variant [supports
+coprocessing](https://www.gnu.org/software/gawk/manual/html_node/Two_002dway-I_002fO.html)
+just like any general-purpose language (you can achieve what `xcopr` does in a Python
+script).
+
+By contrast, `xcopr` is not a programming language at all. It is a small command-line
+utility designed to be used in composition with other tools.
+</details>
+
+<details>
+<summary><code>coproc</code> (bash)</summary>
+
+Bash supports coprocessing via the `coproc` keyword, which lets you set up a
+long-lived subprocess and communicate with it over file descriptors. This vaguely
+resembles what `xcopr` does, but it is a low-level feature requiring careful,
+explicit management to avoid its
+[pitfalls](https://bash-hackers.gabe565.com/syntax/keywords/coproc).
+
+It also has key limitations:
+* It is not pipeline-friendly
+* It is not portable to other shells
+* It doesn't support multiple coprocesses
+</details>
+
+<details>
+<summary><code>expect</code></summary>
+
+Like `xcopr`, `expect` manages subprocess interaction and allows user-configured
+communication with long-running commands.
+
+However:
+* `expect` is designed for terminal automation (e.g., telnet, ssh, passwd), while
+  `xcopr` is for line-based stream processing.
+* `expect` scripts manage control flow and simulate user input; `xcopr` focuses on
+  piping input and output through coprocesses in a pipeline.
+* `expect` runs standalone scripts; `xcopr` is used inline as part of a shell pipeline.
+</details>
+
 
 # Modes
 ## `xcopr filter`
@@ -102,7 +167,7 @@ id  domain   ip
 3   baz.com  3.3.3.3
 ```
 Suppose you need to use this database to enrich a large set of domains, annotating
-them with their associated IP:
+each with its associated IP:
 ```
 # input
 {"domain":"foo.com"}
@@ -114,7 +179,7 @@ them with their associated IP:
 {"domain":"bar.com","ip":"2.2.2.2"}
 ...
 ```
-A reasonable implementation might look like this:
+A quick solution in bash might look like this:
 ```bash
 while read -r line; do
   dom=$(echo $line | jq -r .domain)
